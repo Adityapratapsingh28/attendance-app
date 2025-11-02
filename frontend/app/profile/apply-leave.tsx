@@ -13,7 +13,7 @@ import {
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { applyLeave } from "../../services/supabase"; // adjust path if needed
+import { applyLeave } from "../../services/supabase"; // ✅ Changed from applyLeaveWithUser to applyLeave
 import { useAuth } from "../../services/AuthContext";
 
 export default function ApplyLeaveScreen() {
@@ -42,6 +42,12 @@ export default function ApplyLeaveScreen() {
             return;
         }
 
+        // Additional validation for user ID
+        if (!user.id) {
+            Alert.alert("Authentication Error", "User ID not found. Please login again.");
+            return;
+        }
+
         setIsSubmitting(true);
 
         try {
@@ -52,11 +58,12 @@ export default function ApplyLeaveScreen() {
                 reason: subject,
                 team_name: teamName,
                 user_id: user.id,
-                full_name: user.user_metadata?.full_name,
+                full_name: user.full_name, // ✅ Using user.full_name directly from your AuthContext
                 email: user.email
             });
 
-            await applyLeave({
+            // ✅ Changed from applyLeaveWithUser to applyLeave
+            await applyLeave(user, {
                 leave_type: leaveType,
                 start_date: fromDate.toISOString().split("T")[0],
                 end_date: toDate.toISOString().split("T")[0],
@@ -206,11 +213,11 @@ export default function ApplyLeaveScreen() {
                         activeOpacity={0.8}
                         disabled={isSubmitting}
                     >
-                        <Ionicons 
-                            name={isSubmitting ? "time" : "checkmark-circle"} 
-                            size={20} 
-                            color="#fff" 
-                            style={styles.buttonIcon} 
+                        <Ionicons
+                            name={isSubmitting ? "time" : "checkmark-circle"}
+                            size={20}
+                            color="#fff"
+                            style={styles.buttonIcon}
                         />
                         <Text style={styles.submitButtonText}>
                             {isSubmitting ? "Submitting..." : "Submit Leave Request"}
@@ -228,6 +235,8 @@ export default function ApplyLeaveScreen() {
         </SafeAreaView>
     );
 }
+
+// ... keep all your existing styles unchanged ...
 
 const styles = StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: "#f8f9fa" },

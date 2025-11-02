@@ -347,6 +347,45 @@ or
 }
 ```
 
+## Environment Setup
+
+### Supabase Configuration
+1. **Create a Supabase Account**
+   - Go to [Supabase Dashboard](https://app.supabase.com)
+   - Sign up or log in to your account
+   - Create a new project
+
+2. **Get Your API Keys**
+   - In your Supabase project dashboard, go to Project Settings
+   - Navigate to API section
+   - You will find:
+     - Project URL (`SUPABASE_URL`)
+     - Project API Key (`SUPABASE_KEY`)
+     - Anonymous Key (`ANON_KEY`)
+     - Service Role Key (`SUPABASE_SERVICE_KEY`)
+
+3. **Set Up Environment Variables**
+   - Create a `.env` file in the `backend` directory
+   - Add the following variables:
+     ```env
+     SUPABASE_URL=your_project_url
+     SUPABASE_KEY=your_project_api_key
+     ANON_KEY=your_anon_key
+     SUPABASE_SERVICE_KEY=your_service_role_key
+     BUCKET_NAME=faces
+     ```
+   - Create a `.env` file in the `frontend` directory
+   - Add the following variables:
+     ```env
+     EXPO_PUBLIC_SUPABASE_URL=your_project_url
+     EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+     ```
+
+4. **Important Notes**
+   - Never commit `.env` files to version control
+   - Keep your service role key secure and never expose it in client-side code
+   - The `BUCKET_NAME` is set to "faces" by default for storing face images
+
 ## Best Practices
 
 ### Image Upload Guidelines

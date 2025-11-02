@@ -1,9 +1,9 @@
-import { 
-    View, 
-    Text, 
-    TouchableOpacity, 
-    StyleSheet, 
-    ScrollView, 
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    StyleSheet,
+    ScrollView,
     SafeAreaView,
     RefreshControl,
     ActivityIndicator
@@ -12,6 +12,7 @@ import { router } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
 import { getUserLeaves } from "../../services/supabase";
+import { useAuth } from "../../services/AuthContext"; // Add this import
 
 // Enhanced Leave Card Component
 function LeaveRequestCard({ leave }: any) {
@@ -59,10 +60,10 @@ function LeaveRequestCard({ leave }: any) {
                     <Text style={styles.leaveType}>{leave.leave_type}</Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(leave.status)}15` }]}>
-                    <Ionicons 
-                        name={getStatusIcon(leave.status)} 
-                        size={14} 
-                        color={getStatusColor(leave.status)} 
+                    <Ionicons
+                        name={getStatusIcon(leave.status)}
+                        size={14}
+                        color={getStatusColor(leave.status)}
                     />
                     <Text style={[styles.statusText, { color: getStatusColor(leave.status) }]}>
                         {leave.status}
@@ -103,17 +104,33 @@ function LeaveRequestCard({ leave }: any) {
 }
 
 export default function LeaveStatusScreen() {
+    const { user } = useAuth(); // Get user from auth context
     const [refreshing, setRefreshing] = useState(false);
     const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const fetchLeaves = async () => {
         try {
             setLoading(true);
-            const data = await getUserLeaves();
+            setError(null);
+
+            // Check if user is available and has an ID
+            if (!user?.id) {
+                console.error("User ID not available");
+                setError("User not authenticated");
+                setLeaveRequests([]);
+                return;
+            }
+
+            console.log("Fetching leaves for user:", user.id);
+            const data = await getUserLeaves(user.id); // Pass user ID
+            console.log("Leaves data received:", data);
             setLeaveRequests(data || []);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error fetching leaves:", error);
+            setError(error.message || "Failed to load leave requests");
+            setLeaveRequests([]);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -121,12 +138,19 @@ export default function LeaveStatusScreen() {
     };
 
     useEffect(() => {
-        fetchLeaves();
-    }, []);
+        if (user?.id) {
+            fetchLeaves();
+        } else {
+            setLoading(false);
+            setError("User not authenticated");
+        }
+    }, [user?.id]); // Add dependency on user.id
 
     const onRefresh = () => {
-        setRefreshing(true);
-        fetchLeaves();
+        if (user?.id) {
+            setRefreshing(true);
+            fetchLeaves();
+        }
     };
 
     const getStatusCount = (status: string) => {
@@ -146,13 +170,13 @@ export default function LeaveStatusScreen() {
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            <ScrollView 
+            <ScrollView
                 style={styles.container}
                 contentContainerStyle={styles.contentContainer}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
-                    <RefreshControl 
-                        refreshing={refreshing} 
+                    <RefreshControl
+                        refreshing={refreshing}
                         onRefresh={onRefresh}
                         colors={['#2196F3']}
                         tintColor="#2196F3"
@@ -161,8 +185,8 @@ export default function LeaveStatusScreen() {
             >
                 {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity 
-                        style={styles.backButton} 
+                    <TouchableOpacity
+                        style={styles.backButton}
                         onPress={() => router.back()}
                     >
                         <Ionicons name="chevron-back" size={24} color="#2196F3" />
@@ -176,79 +200,96 @@ export default function LeaveStatusScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Status Summary Cards */}
-                <View style={styles.summaryContainer}>
-                    <View style={styles.summaryCard}>
-                        <View style={styles.summaryIconContainer}>
-                            <Ionicons name="checkmark-circle" size={28} color="#4CAF50" />
-                        </View>
-                        <Text style={styles.summaryNumber}>{getStatusCount('Approved')}</Text>
-                        <Text style={styles.summaryLabel}>Approved</Text>
-                    </View>
-
-                    <View style={styles.summaryCard}>
-                        <View style={styles.summaryIconContainer}>
-                            <Ionicons name="time-outline" size={28} color="#FF9800" />
-                        </View>
-                        <Text style={styles.summaryNumber}>{getStatusCount('Pending')}</Text>
-                        <Text style={styles.summaryLabel}>Pending</Text>
-                    </View>
-
-                    <View style={styles.summaryCard}>
-                        <View style={styles.summaryIconContainer}>
-                            <Ionicons name="close-circle" size={28} color="#f44336" />
-                        </View>
-                        <Text style={styles.summaryNumber}>{getStatusCount('Rejected')}</Text>
-                        <Text style={styles.summaryLabel}>Rejected</Text>
-                    </View>
-                </View>
-
-                {/* Leave Requests Section */}
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Your Leave Requests</Text>
-                    <Text style={styles.sectionSubtitle}>
-                        {leaveRequests.length} total request{leaveRequests.length !== 1 ? 's' : ''}
-                    </Text>
-                </View>
-
-                {/* Leave Request Cards */}
-                {leaveRequests.length === 0 ? (
-                    <View style={styles.emptyState}>
-                        <View style={styles.emptyIconContainer}>
-                            <Ionicons name="calendar-outline" size={64} color="#E3F2FD" />
-                        </View>
-                        <Text style={styles.emptyStateTitle}>No Leave Requests Yet</Text>
-                        <Text style={styles.emptyStateText}>
-                            Start by applying for your first leave request. It's quick and easy!
-                        </Text>
-                        <TouchableOpacity 
-                            style={styles.emptyStateButton}
-                            onPress={() => router.push("/profile/apply-leave")}
-                            activeOpacity={0.8}
-                        >
-                            <Ionicons name="add-circle-outline" size={20} color="#2196F3" />
-                            <Text style={styles.emptyStateButtonText}>Apply for Leave</Text>
+                {/* Error State */}
+                {error && (
+                    <View style={styles.errorContainer}>
+                        <Ionicons name="warning-outline" size={24} color="#f44336" />
+                        <Text style={styles.errorText}>{error}</Text>
+                        <TouchableOpacity style={styles.retryButton} onPress={fetchLeaves}>
+                            <Text style={styles.retryButtonText}>Retry</Text>
                         </TouchableOpacity>
                     </View>
-                ) : (
-                    <>
-                        <View style={styles.leaveCardsContainer}>
-                            {leaveRequests.map((leave) => (
-                                <LeaveRequestCard key={leave.id} leave={leave} />
-                            ))}
+                )}
+
+                {/* Status Summary Cards - Only show if no error */}
+                {!error && (
+                    <View style={styles.summaryContainer}>
+                        <View style={styles.summaryCard}>
+                            <View style={styles.summaryIconContainer}>
+                                <Ionicons name="checkmark-circle" size={28} color="#4CAF50" />
+                            </View>
+                            <Text style={styles.summaryNumber}>{getStatusCount('Approved')}</Text>
+                            <Text style={styles.summaryLabel}>Approved</Text>
                         </View>
 
-                        {/* Action Button */}
-                        <View style={styles.actionContainer}>
-                            <TouchableOpacity 
-                                style={styles.primaryButton}
-                                onPress={() => router.push("/profile/apply-leave")}
-                                activeOpacity={0.8}
-                            >
-                                <Ionicons name="add-circle" size={20} color="#fff" />
-                                <Text style={styles.primaryButtonText}>Apply New Leave</Text>
-                            </TouchableOpacity>
+                        <View style={styles.summaryCard}>
+                            <View style={styles.summaryIconContainer}>
+                                <Ionicons name="time-outline" size={28} color="#FF9800" />
+                            </View>
+                            <Text style={styles.summaryNumber}>{getStatusCount('Pending')}</Text>
+                            <Text style={styles.summaryLabel}>Pending</Text>
                         </View>
+
+                        <View style={styles.summaryCard}>
+                            <View style={styles.summaryIconContainer}>
+                                <Ionicons name="close-circle" size={28} color="#f44336" />
+                            </View>
+                            <Text style={styles.summaryNumber}>{getStatusCount('Rejected')}</Text>
+                            <Text style={styles.summaryLabel}>Rejected</Text>
+                        </View>
+                    </View>
+                )}
+
+                {/* Leave Requests Section */}
+                {!error && (
+                    <>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>Your Leave Requests</Text>
+                            <Text style={styles.sectionSubtitle}>
+                                {leaveRequests.length} total request{leaveRequests.length !== 1 ? 's' : ''}
+                            </Text>
+                        </View>
+
+                        {/* Leave Request Cards */}
+                        {leaveRequests.length === 0 ? (
+                            <View style={styles.emptyState}>
+                                <View style={styles.emptyIconContainer}>
+                                    <Ionicons name="calendar-outline" size={64} color="#E3F2FD" />
+                                </View>
+                                <Text style={styles.emptyStateTitle}>No Leave Requests Yet</Text>
+                                <Text style={styles.emptyStateText}>
+                                    Start by applying for your first leave request. It's quick and easy!
+                                </Text>
+                                <TouchableOpacity
+                                    style={styles.emptyStateButton}
+                                    onPress={() => router.push("/profile/apply-leave")}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="add-circle-outline" size={20} color="#2196F3" />
+                                    <Text style={styles.emptyStateButtonText}>Apply for Leave</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <>
+                                <View style={styles.leaveCardsContainer}>
+                                    {leaveRequests.map((leave) => (
+                                        <LeaveRequestCard key={leave.id} leave={leave} />
+                                    ))}
+                                </View>
+
+                                {/* Action Button */}
+                                <View style={styles.actionContainer}>
+                                    <TouchableOpacity
+                                        style={styles.primaryButton}
+                                        onPress={() => router.push("/profile/apply-leave")}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons name="add-circle" size={20} color="#fff" />
+                                        <Text style={styles.primaryButtonText}>Apply New Leave</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </>
+                        )}
                     </>
                 )}
             </ScrollView>
@@ -257,15 +298,15 @@ export default function LeaveStatusScreen() {
 }
 
 const styles = StyleSheet.create({
-    safeArea: { 
-        flex: 1, 
-        backgroundColor: '#f8f9fa' 
+    safeArea: {
+        flex: 1,
+        backgroundColor: '#f8f9fa'
     },
-    container: { 
-        flex: 1 
+    container: {
+        flex: 1
     },
-    contentContainer: { 
-        paddingBottom: 30 
+    contentContainer: {
+        paddingBottom: 30
     },
     loadingContainer: {
         flex: 1,
@@ -279,17 +320,17 @@ const styles = StyleSheet.create({
         color: '#666',
         fontWeight: '500'
     },
-    header: { 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        justifyContent: 'space-between', 
-        paddingHorizontal: 20, 
-        paddingVertical: 16, 
-        backgroundColor: '#fff', 
-        borderBottomWidth: 1, 
-        borderBottomColor: '#E3F2FD' 
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E3F2FD'
     },
-    backButton: { 
+    backButton: {
         width: 40,
         height: 40,
         borderRadius: 20,
@@ -297,17 +338,17 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center'
     },
-    title: { 
-        fontSize: 22, 
-        fontWeight: '700', 
-        color: '#1976D2' 
+    title: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: '#1976D2'
     },
     subtitle: {
         fontSize: 14,
         color: '#666',
         marginTop: 2
     },
-    refreshButton: { 
+    refreshButton: {
         width: 40,
         height: 40,
         borderRadius: 20,
@@ -315,59 +356,59 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center'
     },
-    summaryContainer: { 
-        flexDirection: 'row', 
-        paddingHorizontal: 20, 
-        paddingTop: 20, 
-        gap: 12 
+    summaryContainer: {
+        flexDirection: 'row',
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        gap: 12
     },
-    summaryCard: { 
-        flex: 1, 
-        backgroundColor: '#fff', 
-        borderRadius: 16, 
-        padding: 20, 
-        alignItems: 'center', 
-        shadowColor: '#2196F3', 
-        shadowOffset: { width: 0, height: 2 }, 
-        shadowOpacity: 0.1, 
-        shadowRadius: 4, 
+    summaryCard: {
+        flex: 1,
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 20,
+        alignItems: 'center',
+        shadowColor: '#2196F3',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
         elevation: 2,
         borderWidth: 1,
         borderColor: '#E3F2FD'
     },
-    summaryIconContainer: { 
-        marginBottom: 12 
+    summaryIconContainer: {
+        marginBottom: 12
     },
-    summaryNumber: { 
-        fontSize: 28, 
-        fontWeight: '800', 
-        color: '#1976D2', 
-        marginBottom: 4 
+    summaryNumber: {
+        fontSize: 28,
+        fontWeight: '800',
+        color: '#1976D2',
+        marginBottom: 4
     },
-    summaryLabel: { 
-        fontSize: 12, 
-        color: '#666', 
+    summaryLabel: {
+        fontSize: 12,
+        color: '#666',
         fontWeight: '600',
         textTransform: 'uppercase'
     },
-    sectionHeader: { 
-        paddingHorizontal: 20, 
-        paddingTop: 30, 
-        paddingBottom: 16 
+    sectionHeader: {
+        paddingHorizontal: 20,
+        paddingTop: 30,
+        paddingBottom: 16
     },
-    sectionTitle: { 
-        fontSize: 20, 
-        fontWeight: '700', 
-        color: '#1976D2', 
-        marginBottom: 4 
+    sectionTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1976D2',
+        marginBottom: 4
     },
-    sectionSubtitle: { 
-        fontSize: 14, 
-        color: '#666' 
+    sectionSubtitle: {
+        fontSize: 14,
+        color: '#666'
     },
-    leaveCardsContainer: { 
-        paddingHorizontal: 20, 
-        gap: 16 
+    leaveCardsContainer: {
+        paddingHorizontal: 20,
+        gap: 16
     },
     leaveCard: {
         backgroundColor: '#fff',
@@ -456,9 +497,9 @@ const styles = StyleSheet.create({
         color: '#333',
         lineHeight: 20
     },
-    emptyState: { 
-        alignItems: 'center', 
-        paddingVertical: 60, 
+    emptyState: {
+        alignItems: 'center',
+        paddingVertical: 60,
         paddingHorizontal: 20,
         backgroundColor: '#fff',
         marginHorizontal: 20,
@@ -475,16 +516,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 24
     },
-    emptyStateTitle: { 
-        fontSize: 20, 
-        fontWeight: '700', 
-        color: '#1976D2', 
-        marginBottom: 12 
+    emptyStateTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1976D2',
+        marginBottom: 12
     },
-    emptyStateText: { 
-        fontSize: 16, 
-        color: '#666', 
-        textAlign: 'center', 
+    emptyStateText: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
         lineHeight: 24,
         marginBottom: 24
     },
@@ -502,16 +543,16 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600'
     },
-    actionContainer: { 
-        paddingHorizontal: 20, 
+    actionContainer: {
+        paddingHorizontal: 20,
         paddingTop: 30
     },
-    primaryButton: { 
-        backgroundColor: '#2196F3', 
-        borderRadius: 12, 
-        paddingVertical: 16, 
-        flexDirection: 'row', 
-        alignItems: 'center', 
+    primaryButton: {
+        backgroundColor: '#2196F3',
+        borderRadius: 12,
+        paddingVertical: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
         shadowColor: '#2196F3',
@@ -520,9 +561,9 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 4
     },
-    primaryButtonText: { 
-        color: '#fff', 
-        fontSize: 16, 
-        fontWeight: '700' 
+    primaryButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '700'
     },
 });

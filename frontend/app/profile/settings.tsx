@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 export default function SettingsScreen() {
     const { user, signOut, role } = useAuth();
     const [loggingOut, setLoggingOut] = useState(false);
-    
+
     // Simple settings state
     const [notifications, setNotifications] = useState(true);
     const [darkMode, setDarkMode] = useState(false);
@@ -34,11 +34,17 @@ export default function SettingsScreen() {
                     onPress: async () => {
                         try {
                             setLoggingOut(true);
+                            // Navigate immediately for better UX
+                            setTimeout(() => {
+                                router.replace('/onboarding/signin');
+                            }, 100);
+                            
+                            // Then attempt signout
                             await signOut();
-                            router.replace('/(auth)/login');
                         } catch (error) {
                             console.error('Sign out error:', error);
-                            Alert.alert('Error', 'Failed to sign out. Please try again.');
+                            // Force navigation even if there's an error
+                            router.replace('/onboarding/signin');
                         } finally {
                             setLoggingOut(false);
                         }
@@ -56,14 +62,14 @@ export default function SettingsScreen() {
         router.push('/profile/leave-status');
     };
 
-    const SettingItem = ({ 
-        icon, 
-        title, 
-        subtitle, 
-        onPress, 
-        showChevron = true, 
+    const SettingItem = ({
+        icon,
+        title,
+        subtitle,
+        onPress,
+        showChevron = true,
         danger = false,
-        disabled = false 
+        disabled = false
     }: {
         icon: any;
         title: string;
@@ -88,10 +94,10 @@ export default function SettingsScreen() {
                     styles.iconContainer,
                     danger ? styles.dangerIconContainer : styles.normalIconContainer
                 ]}>
-                    <Ionicons 
-                        name={icon} 
-                        size={20} 
-                        color={danger ? '#dc3545' : '#2196F3'} 
+                    <Ionicons
+                        name={icon}
+                        size={20}
+                        color={danger ? '#dc3545' : '#2196F3'}
                     />
                 </View>
                 <View style={styles.settingText}>
@@ -111,21 +117,21 @@ export default function SettingsScreen() {
             </View>
 
             {showChevron && (
-                <Ionicons 
-                    name="chevron-forward" 
-                    size={16} 
-                    color={danger ? '#dc3545' : '#ccc'} 
+                <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={danger ? '#dc3545' : '#ccc'}
                 />
             )}
         </TouchableOpacity>
     );
 
-    const SettingSwitch = ({ 
-        icon, 
-        title, 
-        subtitle, 
-        value, 
-        onValueChange 
+    const SettingSwitch = ({
+        icon,
+        title,
+        subtitle,
+        value,
+        onValueChange
     }: {
         icon: any;
         title: string;
@@ -179,8 +185,8 @@ export default function SettingsScreen() {
                 <View style={styles.userCard}>
                     <View style={styles.userAvatar}>
                         <Text style={styles.userInitial}>
-                            {user?.user_metadata?.full_name?.charAt(0)?.toUpperCase() || 
-                             user?.email?.charAt(0)?.toUpperCase() || 'U'}
+                            {user?.user_metadata?.full_name?.charAt(0)?.toUpperCase() ||
+                                user?.email?.charAt(0)?.toUpperCase() || 'U'}
                         </Text>
                     </View>
                     <View style={styles.userInfo}>

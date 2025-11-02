@@ -1,19 +1,31 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { supabase } from "./supabase";
-import { User, Session, AuthError } from "@supabase/supabase-js";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from "./supabase"; // Add this import
+
+interface User {
+    id: string;
+    full_name: string;
+    email: string;
+    phone?: string;
+    employee_id?: string;
+    role: "admin" | "user";
+    created_at: string;
+    last_login?: string;
+}
 
 interface AuthContextType {
     user: User | null;
-    session: Session | null;
     loading: boolean;
     role: "admin" | "user" | null;
-    error: AuthError | null;
     initialized: boolean;
+    signIn: (email: string, password: string) => Promise<void>; // Updated signature
     signOut: () => Promise<void>;
-    clearError: () => void;
+    refreshUser: () => Promise<void>; // Add this method
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const USER_STORAGE_KEY = '@user_session';
 
 interface AuthProviderProps {
     children: ReactNode;
@@ -21,101 +33,126 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
     const [user, setUser] = useState<User | null>(null);
-    const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
     const [role, setRole] = useState<"admin" | "user" | null>(null);
-    const [error, setError] = useState<AuthError | null>(null);
     const [initialized, setInitialized] = useState(false);
 
-    const updateUserState = (session: Session | null) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user?.email === "admin@gmail.com") {
-            setRole("admin");
-        } else if (session?.user) {
-            setRole("user");
-        } else {
-            setRole(null);
+    // Load user session on mount
+    useEffect(() => {
+        loadUserSession();
+    }, []);
+
+    const loadUserSession = async () => {
+        try {
+            const userJson = await AsyncStorage.getItem(USER_STORAGE_KEY);
+            if (userJson) {
+                const userData = JSON.parse(userJson);
+
+                // Verify user still exists in database
+                const { data: dbUser, error } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', userData.id)
+                    .single();
+
+                if (error || !dbUser) {
+                    // User no longer exists in database, clear session
+                    await AsyncStorage.removeItem(USER_STORAGE_KEY);
+                    setUser(null);
+                    setRole(null);
+                } else {
+                    setUser(dbUser);
+                    setRole(dbUser.role);
+                    console.log('User session loaded:', dbUser.email);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading user session:', error);
+            // Clear corrupted session
+            await AsyncStorage.removeItem(USER_STORAGE_KEY);
+        } finally {
+            setLoading(false);
+            setInitialized(true);
         }
     };
 
-    useEffect(() => {
-        let isMounted = true;
+    const signIn = async (email: string, password: string) => {
+        try {
+            // First, authenticate with Supabase Auth
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
 
-        // Get initial session
-        const getInitialSession = async () => {
-            try {
-                const { data: { session }, error } = await supabase.auth.getSession();
-                
-                if (error) {
-                    console.error("Error getting session:", error);
-                    setError(error);
-                } else if (isMounted) {
-                    updateUserState(session);
-                }
-            } catch (err) {
-                console.error("Unexpected error:", err);
-            } finally {
-                if (isMounted) {
-                    setLoading(false);
-                    setInitialized(true);
-                }
+            if (authError) throw authError;
+            if (!authData.user) throw new Error('No user data returned');
+
+            // Then get user profile from users table
+            const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', authData.user.id)
+                .single();
+
+            if (userError) throw userError;
+            if (!userData) throw new Error('User profile not found');
+
+            // Store the complete user data with proper ID
+            await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
+            setUser(userData);
+            setRole(userData.role);
+            console.log('User signed in:', userData.email);
+
+        } catch (error) {
+            console.error('Error during sign in:', error);
+            throw error;
+        }
+    };
+
+    const refreshUser = async () => {
+        if (!user) return;
+
+        try {
+            const { data: userData, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+
+            if (error) throw error;
+            if (userData) {
+                await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
+                setUser(userData);
+                setRole(userData.role);
             }
-        };
-
-        getInitialSession();
-
-        // Listen for auth changes
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange((event, session) => {
-            console.log("Auth state changed:", event, session?.user?.email);
-            
-            if (isMounted) {
-                updateUserState(session);
-                setLoading(false);
-                setInitialized(true);
-                setError(null); // Clear any previous errors on state change
-            }
-        });
-
-        return () => {
-            isMounted = false;
-            subscription.unsubscribe();
-        };
-    }, []);
+        } catch (error) {
+            console.error('Error refreshing user data:', error);
+        }
+    };
 
     const signOut = async () => {
         try {
-            setLoading(true);
-            const { error } = await supabase.auth.signOut();
-            if (error) {
-                setError(error);
-                throw error;
-            }
-            setError(null);
+            // Sign out from Supabase Auth
+            await supabase.auth.signOut();
+            // Clear local storage
+            await AsyncStorage.removeItem(USER_STORAGE_KEY);
+            setUser(null);
+            setRole(null);
+            console.log('User signed out');
         } catch (error) {
-            console.error("Error signing out:", error);
+            console.error('Error during sign out:', error);
             throw error;
-        } finally {
-            setLoading(false);
         }
-    };
-
-    const clearError = () => {
-        setError(null);
     };
 
     const value: AuthContextType = {
         user,
-        session,
         loading,
         role,
-        error,
         initialized,
+        signIn,
         signOut,
-        clearError,
+        refreshUser,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

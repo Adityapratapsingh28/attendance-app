@@ -1,22 +1,27 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Alert, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Alert, ActivityIndicator, ScrollView, TouchableOpacity, Modal } from "react-native";
 import Input from "../../components/Input";
 import Button from "../../components/Button";
 import { useRouter } from "expo-router";
-import { supabase } from "../../services/supabase";
+import { signInWithEmail } from "../../services/authService";
+import { useAuth } from "../../services/AuthContext";
 
 export default function SignIn() {
     const router = useRouter();
+    const { signIn } = useAuth();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
-    const [isSignUp, setIsSignUp] = useState(false);
+    const [showActionModal, setShowActionModal] = useState(false);
 
-    const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const validateEmail = (email: string) => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    };
 
     const handleSubmit = async () => {
-        if (!email.trim() || !password.trim()) {
-            Alert.alert("Error", "Please enter both email and password");
+        if (!email.trim()) {
+            Alert.alert("Error", "Please enter your email address");
             return;
         }
 
@@ -25,62 +30,66 @@ export default function SignIn() {
             return;
         }
 
+        if (!password) {
+            Alert.alert("Error", "Please enter your password");
+            return;
+        }
+
         setLoading(true);
 
         try {
-            if (isSignUp) {
-                // 🔹 Sign-up logic removed, just redirect
-                router.replace("/face-verification/pre");
+            console.log("=== SIGNIN DEBUG START ===");
+            const result = await signInWithEmail(email, password);
+            console.log("Signin API result:", result);
+
+            if (result.ok && result.user) {
+                console.log("✅ Auth successful, storing user session...");
+
+                // Store user session
+                await signIn(result.user);
+                console.log("✅ User session stored");
+
+                // Show action modal instead of navigating directly
+                setShowActionModal(true);
+
+                console.log("✅ Action modal shown");
             } else {
-                // 🔹 Login using Supabase
-                const { data, error } = await supabase.auth.signInWithPassword({
-                    email: email.toLowerCase().trim(),
-                    password: password.trim(),
-                });
-
-                if (error) throw error;
-
-                const firstLogin = data.user?.user_metadata?.first_login;
-                if (firstLogin) {
-                    router.replace("/face-verification/pre");
-                } else {
-                    router.replace("/face-verification/post");
-                }
+                console.log("❌ Signin failed:", result.error);
+                Alert.alert("Error", result.error || "Failed to sign in. Please try again.");
             }
-        } catch (error: any) {
-            console.error("Authentication error:", error);
-            Alert.alert("Authentication Error", error.message || "An error occurred");
+        } catch (err) {
+            console.error("🚨 Signin catch error:", err);
+            Alert.alert("Error", "An unexpected error occurred. Please try again.");
         } finally {
             setLoading(false);
+            console.log("=== SIGNIN DEBUG END ===");
         }
     };
 
-    const handleForgotPassword = async () => {
-        if (!validateEmail(email)) {
-            Alert.alert("Error", "Enter a valid email first");
-            return;
-        }
-        try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email.toLowerCase().trim());
-            if (error) throw error;
-            Alert.alert("Password Reset", "Check your email for reset instructions");
-        } catch (error: any) {
-            Alert.alert("Error", error.message);
-        }
+    const handleRegisterFace = () => {
+        setShowActionModal(false);
+        console.log("🔄 Navigating to face registration...");
+        router.replace("/face-verification/pre");
     };
+
+    const handleStartScanning = () => {
+        setShowActionModal(false);
+        console.log("🔄 Navigating to scanning...");
+        router.replace("/face-verification/post");
+    };
+
+    // Remove debug buttons since we don't need them anymore
 
     return (
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-            <View style={styles.header}>
-                <Text style={styles.title}>{isSignUp ? "Create Account" : "Welcome Back"}</Text>
-                <Text style={styles.subtitle}>
-                    {isSignUp ? "Enter credentials to proceed" : "Sign in to your account"}
-                </Text>
-            </View>
+        <>
+            <ScrollView contentContainerStyle={styles.container}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>Welcome Back</Text>
+                    <Text style={styles.subtitle}>Sign in to your account</Text>
+                </View>
 
-            <View style={styles.formContainer}>
-                <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Email</Text>
+                <View style={styles.inputContainer}>
+                    <Text style={styles.label}>Email</Text>
                     <Input
                         placeholder="Enter your email"
                         keyboardType="email-address"
@@ -88,75 +97,234 @@ export default function SignIn() {
                         onChangeText={setEmail}
                         style={styles.input}
                         autoCapitalize="none"
-                        autoComplete="email"
+                        editable={!loading}
                     />
                 </View>
 
-                <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Password</Text>
+                <View style={styles.inputContainer}>
+                    <Text style={styles.label}>Password</Text>
                     <Input
                         placeholder="Enter your password"
-                        secureTextEntry
                         value={password}
                         onChangeText={setPassword}
                         style={styles.input}
-                        autoComplete="password"
+                        secureTextEntry
+                        editable={!loading}
                     />
                 </View>
-            </View>
 
-            <View style={styles.buttonContainer}>
-                <Button
-                    title={loading ? "Processing..." : isSignUp ? "Proceed" : "Sign In"}
-                    onPress={handleSubmit}
-                    disabled={loading}
-                    style={styles.primaryButton}
-                />
-                {!isSignUp && (
-                    <Button variant="ghost" title="Forgot Password?" onPress={handleForgotPassword} />
+                <TouchableOpacity
+                    onPress={() => router.push("/onboarding/forgot-password")}
+                    style={styles.forgotPassword}
+                >
+                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                </TouchableOpacity>
+
+                <View style={{ height: 20 }} />
+
+                {loading ? (
+                    <ActivityIndicator size="large" color="#4F46E5" />
+                ) : (
+                    <Button
+                        title={loading ? "Signing In..." : "Sign In"}
+                        onPress={handleSubmit}
+                        style={styles.button}
+                    />
                 )}
+
+                <View style={{ height: 16 }} />
+
                 <Button
                     variant="ghost"
-                    title={isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
-                    onPress={() => setIsSignUp(!isSignUp)}
+                    title="Don't have an account? Sign Up"
+                    onPress={() => router.push("/onboarding/signup")}
+                    style={styles.signUpButton}
                 />
-            </View>
+            </ScrollView>
 
-            <View style={styles.footer}>
-                <Text style={styles.footerText}>
-                    By continuing, you agree to our Terms of Service and Privacy Policy
-                </Text>
-            </View>
-        </ScrollView>
+            {/* Action Selection Modal */}
+            <Modal
+                visible={showActionModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowActionModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContainer}>
+                        <Text style={styles.modalTitle}>Choose Action</Text>
+                        <Text style={styles.modalSubtitle}>What would you like to do?</Text>
+
+                        <View style={styles.modalButtonsContainer}>
+                            {/* Register New Face Button */}
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.registerButton]}
+                                onPress={handleRegisterFace}
+                            >
+                                <Text style={styles.buttonIcon}>👤</Text>
+                                <Text style={styles.buttonTitle}>Register New Face</Text>
+                                <Text style={styles.buttonDescription}>
+                                    Add a new face to the recognition system
+                                </Text>
+                            </TouchableOpacity>
+
+                            {/* Start Scanning Button */}
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.scanButton]}
+                                onPress={handleStartScanning}
+                            >
+                                <Text style={styles.buttonIcon}>📷</Text>
+                                <Text style={styles.buttonTitle}>Start Scanning</Text>
+                                <Text style={styles.buttonDescription}>
+                                    Begin face recognition scanning
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.closeButton}
+                            onPress={() => setShowActionModal(false)}
+                        >
+                            <Text style={styles.closeButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+        </>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#f8fafc" },
-    contentContainer: { padding: 20, minHeight: "100%" },
-    header: { marginTop: 40, marginBottom: 32, alignItems: "center" },
-    title: { fontSize: 28, fontWeight: "700", color: "#1f2937", marginBottom: 8 },
-    subtitle: { fontSize: 16, color: "#6b7280", textAlign: "center" },
-    formContainer: {
-        backgroundColor: "white",
+    container: {
+        flexGrow: 1,
+        padding: 20,
+        justifyContent: "center",
+        backgroundColor: "#F9FAFB"
+    },
+    header: {
+        alignItems: "center",
+        marginBottom: 40
+    },
+    title: {
+        fontSize: 28,
+        fontWeight: "700",
+        marginBottom: 8,
+        textAlign: "center",
+        color: "#1F2937"
+    },
+    subtitle: {
+        fontSize: 14,
+        color: "#6B7280",
+        textAlign: "center"
+    },
+    inputContainer: {
+        marginBottom: 20
+    },
+    label: {
+        fontSize: 14,
+        fontWeight: "600",
+        marginBottom: 8,
+        color: "#374151"
+    },
+    input: {
+        backgroundColor: "white"
+    },
+    forgotPassword: {
+        alignSelf: "flex-end",
+        marginTop: -10
+    },
+    forgotPasswordText: {
+        color: "#4F46E5",
+        fontSize: 14,
+        fontWeight: "500"
+    },
+    button: {
+        borderRadius: 8,
+        paddingVertical: 16,
+        backgroundColor: "#4F46E5"
+    },
+    signUpButton: {
+        marginTop: 8
+    },
+    // Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalContainer: {
+        backgroundColor: 'white',
         borderRadius: 16,
         padding: 24,
-        marginBottom: 24,
-        elevation: 3,
+        width: '100%',
+        maxWidth: 400,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
     },
-    inputGroup: { marginBottom: 16 },
-    inputLabel: { fontSize: 14, fontWeight: "600", marginBottom: 4 },
-    input: {
-        backgroundColor: "#f9fafb",
-        borderWidth: 1,
-        borderColor: "#e5e7eb",
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
+    modalTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        color: '#1F2937',
+        marginBottom: 8,
+    },
+    modalSubtitle: {
         fontSize: 16,
+        textAlign: 'center',
+        color: '#6B7280',
+        marginBottom: 32,
     },
-    buttonContainer: { gap: 16 },
-    primaryButton: { backgroundColor: "#3b82f6", borderRadius: 12, paddingVertical: 16 },
-    footer: { marginTop: "auto", paddingTop: 32, paddingBottom: 20 },
-    footerText: { fontSize: 12, color: "#9ca3af", textAlign: "center" },
+    modalButtonsContainer: {
+        marginBottom: 20,
+    },
+    modalButton: {
+        padding: 20,
+        borderRadius: 12,
+        marginBottom: 16,
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    registerButton: {
+        backgroundColor: '#F0F9FF',
+        borderColor: '#0EA5E9',
+    },
+    scanButton: {
+        backgroundColor: '#F0FDF4',
+        borderColor: '#10B981',
+    },
+    buttonIcon: {
+        fontSize: 32,
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    buttonTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        textAlign: 'center',
+        color: '#1F2937',
+        marginBottom: 4,
+    },
+    buttonDescription: {
+        fontSize: 14,
+        textAlign: 'center',
+        color: '#6B7280',
+    },
+    closeButton: {
+        padding: 16,
+        borderRadius: 8,
+        backgroundColor: '#F3F4F6',
+        alignItems: 'center',
+    },
+    closeButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#374151',
+    },
 });

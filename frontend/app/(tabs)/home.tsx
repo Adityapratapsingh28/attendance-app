@@ -109,7 +109,7 @@ export default function Home() {
     const [attendanceStatus, setAttendanceStatus] = useState<
         "not_started" | "working" | "break" | "completed"
     >("not_started");
-    
+
     // Real-time data states
     const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
         todayHours: 0,
@@ -135,7 +135,7 @@ export default function Home() {
     // Timer effect for active session
     useEffect(() => {
         let interval: NodeJS.Timeout;
-        
+
         if (todayClocking && !todayClocking.clock_out) {
             // Calculate elapsed seconds for current session
             const clockInTime = new Date(todayClocking.clock_in).getTime();
@@ -177,7 +177,7 @@ export default function Home() {
                 setTodayClocking(data);
                 setIsClockIn(!!data.clock_out);
                 setAttendanceStatus(data.clock_out ? 'completed' : 'working');
-                
+
                 // Calculate current session seconds if clocked in
                 if (!data.clock_out) {
                     const clockInTime = new Date(data.clock_in).getTime();
@@ -203,7 +203,7 @@ export default function Home() {
         try {
             const now = new Date();
             const today = now.toISOString().split('T')[0];
-            
+
             // Check if there's an existing record for today
             const { data: existingRecord } = await supabase
                 .from('clocking_time')
@@ -241,12 +241,12 @@ export default function Home() {
             setTodayClocking(data);
             setIsClockIn(false);
             setAttendanceStatus('working');
-            
+
             // Start timer
             setCurrentSessionSeconds(0);
-            
+
             Alert.alert("Success", "Clocked in successfully!");
-            
+
         } catch (error) {
             console.error('Error clocking in:', error);
             Alert.alert("Error", "Failed to clock in. Please try again.");
@@ -261,10 +261,10 @@ export default function Home() {
             const now = new Date();
             const clockInTime = new Date(todayClocking.clock_in).getTime();
             const clockOutTime = now.getTime();
-            
+
             // Calculate total seconds for this session
             const sessionSeconds = Math.floor((clockOutTime - clockInTime) / 1000);
-            
+
             // Calculate total seconds including any previous sessions
             const totalSeconds = todayClocking.total_seconds + sessionSeconds;
 
@@ -290,14 +290,14 @@ export default function Home() {
                 clock_out: now.toISOString(),
                 total_seconds: totalSeconds
             };
-            
+
             setTodayClocking(updatedRecord);
             setIsClockIn(true);
             setAttendanceStatus('completed');
             setCurrentSessionSeconds(0);
 
             Alert.alert("Success", `Clocked out successfully! Total time: ${formatSecondsToTime(totalSeconds)}`);
-            
+
         } catch (error) {
             console.error('Error clocking out:', error);
             Alert.alert("Error", "Failed to clock out. Please try again.");
@@ -314,14 +314,14 @@ export default function Home() {
     // Get current working hours for display
     const getCurrentWorkingHours = (): string => {
         if (!todayClocking) return "0h 0m";
-        
+
         let totalSeconds = todayClocking.total_seconds || 0;
-        
+
         // Add current session seconds if still clocked in
         if (!todayClocking.clock_out) {
             totalSeconds += currentSessionSeconds;
         }
-        
+
         return formatSecondsToTime(totalSeconds);
     };
 
@@ -332,11 +332,11 @@ export default function Home() {
         try {
             const data = await getUserLeaves();
             setLeaveRequests(data || []);
-            
+
             // Calculate leave stats
             const pendingLeaves = data?.filter(leave => leave.status === 'Pending').length || 0;
             const rejectedLeaves = data?.filter(leave => leave.status === 'Rejected').length || 0;
-            
+
             setDashboardStats(prev => ({
                 ...prev,
                 pendingLeaves,
@@ -551,8 +551,8 @@ export default function Home() {
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 refreshControl={
-                    <RefreshControl 
-                        refreshing={refreshing} 
+                    <RefreshControl
+                        refreshing={refreshing}
                         onRefresh={onRefresh}
                         tintColor="#fff"
                         colors={[Colors.light.primary || "#007bff"]}
@@ -572,8 +572,8 @@ export default function Home() {
                                     {formatDate(currentTime, "long")}
                                 </Text>
                             </View>
-                            
-                            <TouchableOpacity 
+
+                            <TouchableOpacity
                                 style={styles.profileButton}
                                 onPress={() => router.push("/profile")}
                             >
@@ -628,7 +628,7 @@ export default function Home() {
                         <Text style={styles.quickStatValue}>{getCurrentWorkingHours()}</Text>
                         <Text style={styles.quickStatLabel}>Today</Text>
                     </View>
-                    
+
                     <View style={styles.quickStatCard}>
                         <View style={styles.quickStatIcon}>
                             <Ionicons name="calendar" size={20} color="#28a745" />
@@ -636,7 +636,7 @@ export default function Home() {
                         <Text style={styles.quickStatValue}>{dashboardStats.monthlyAttendance}</Text>
                         <Text style={styles.quickStatLabel}>This Month</Text>
                     </View>
-                    
+
                     <View style={styles.quickStatCard}>
                         <View style={styles.quickStatIcon}>
                             <Ionicons name="trending-up" size={20} color="#ffc107" />
@@ -650,7 +650,7 @@ export default function Home() {
                 {(dashboardStats.pendingLeaves > 0 || dashboardStats.rejectedLeaves > 0) && (
                     <View style={styles.leaveStatusContainer}>
                         {dashboardStats.pendingLeaves > 0 && (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={[styles.leaveStatusCard, { borderLeftColor: '#ffc107' }]}
                                 onPress={() => router.push('/leave/status')}
                             >
@@ -666,7 +666,7 @@ export default function Home() {
                         )}
 
                         {dashboardStats.rejectedLeaves > 0 && (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={[styles.leaveStatusCard, { borderLeftColor: '#dc3545' }]}
                                 onPress={() => router.push('/leave/status')}
                             >
@@ -694,14 +694,14 @@ export default function Home() {
                             />
                             <Text style={styles.cardTitle}>Today's Activity</Text>
                         </View>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.cardAction}
                             onPress={onRefresh}
                         >
                             <Ionicons name="refresh" size={18} color={Colors.light.gray400 || "#6c757d"} />
                         </TouchableOpacity>
                     </View>
-                    <TimerWidget 
+                    <TimerWidget
                         totalSeconds={todayClocking?.total_seconds || 0}
                         currentSessionSeconds={currentSessionSeconds}
                         isActive={attendanceStatus === 'working'}
@@ -761,7 +761,7 @@ export default function Home() {
                         />
                         <Button
                             title="Apply Leave"
-                            onPress={() => router.push("/leave/apply")}
+                            onPress={() => router.push("/profile/leave-status")}
                             variant="ghost"
                             size="medium"
                             style={styles.secondaryButton}
@@ -819,20 +819,20 @@ const styles = StyleSheet.create({
     quickStatIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#f8f9fa", justifyContent: "center", alignItems: "center", marginBottom: 8 },
     quickStatValue: { fontSize: 18, fontWeight: "700", color: "#333", marginBottom: 4 },
     quickStatLabel: { fontSize: 12, color: "#666", fontWeight: "500" },
-    
+
     // Leave Status Styles
     leaveStatusContainer: { paddingHorizontal: 20, marginTop: 10 },
-    leaveStatusCard: { 
-        backgroundColor: "#fff", 
-        borderRadius: 12, 
-        padding: 16, 
-        marginBottom: 8, 
+    leaveStatusCard: {
+        backgroundColor: "#fff",
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 8,
         borderLeftWidth: 4,
-        shadowColor: "#000", 
-        shadowOffset: { width: 0, height: 1 }, 
-        shadowOpacity: 0.05, 
-        shadowRadius: 4, 
-        elevation: 2 
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2
     },
     leaveStatusContent: { flexDirection: "row", alignItems: "center" },
     leaveStatusText: { flex: 1, marginLeft: 12 },

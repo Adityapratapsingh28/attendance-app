@@ -12,6 +12,7 @@ import { router } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from "react";
 import { useAuth } from "../../services/AuthContext"; // Import useAuth hook
+import { supabase } from "../../services/supabase";
 
 export default function ProfileScreen() {
     const { user, signOut, loading: authLoading } = useAuth(); // Use auth context
@@ -53,26 +54,28 @@ export default function ProfileScreen() {
                     style: "destructive",
                     onPress: async () => {
                         try {
+                            console.log("Starting logout process...");
                             setLoggingOut(true);
-
+                            
+                            // Clear local state first for immediate UI feedback
+                            setUserData(null);
+                            
+                            // Force hard navigation to signin page
+                            setTimeout(() => {
+                                router.replace("/onboarding/signin");
+                            }, 100);
+                            
                             // Use the signOut method from AuthContext
                             await signOut();
-
-                            // Clear local state
-                            setUserData(null);
-
-                            // The AuthContext will handle the navigation automatically
-                            // But we can also explicitly navigate to ensure it works
-                            router.replace("/(auth)/login");
+                            console.log("SignOut completed successfully");
 
                         } catch (error: any) {
-                            console.error("Logout error:", error);
-                            Alert.alert(
-                                "Logout Failed",
-                                error.message || "Something went wrong during logout. Please try again."
-                            );
+                            console.error("Detailed logout error:", error);
+                            // Force navigation even if there's an error
+                            router.replace("/onboarding/signin");
                         } finally {
                             setLoggingOut(false);
+                            console.log("Logout process completed");
                         }
                     }
                 }
@@ -211,7 +214,13 @@ export default function ProfileScreen() {
                             styles.logoutButton,
                             loggingOut && styles.logoutButtonDisabled
                         ]}
-                        onPress={handleLogout}
+                        onPress={() => {
+                            setLoggingOut(true);
+                            // Force navigation first
+                            router.replace("/onboarding/signin");
+                            // Then attempt signout in background
+                            signOut().catch(err => console.error("Signout error:", err));
+                        }}
                         activeOpacity={0.8}
                         disabled={loggingOut}
                     >
