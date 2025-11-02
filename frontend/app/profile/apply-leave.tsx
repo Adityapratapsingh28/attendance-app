@@ -13,7 +13,7 @@ import {
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { applyLeave } from "../../services/supabase"; // ✅ Changed from applyLeaveWithUser to applyLeave
+import { applyLeave } from "../../services/supabase";
 import { useAuth } from "../../services/AuthContext";
 
 export default function ApplyLeaveScreen() {
@@ -42,7 +42,6 @@ export default function ApplyLeaveScreen() {
             return;
         }
 
-        // Additional validation for user ID
         if (!user.id) {
             Alert.alert("Authentication Error", "User ID not found. Please login again.");
             return;
@@ -58,11 +57,10 @@ export default function ApplyLeaveScreen() {
                 reason: subject,
                 team_name: teamName,
                 user_id: user.id,
-                full_name: user.full_name, // ✅ Using user.full_name directly from your AuthContext
+                full_name: user.full_name,
                 email: user.email
             });
 
-            // ✅ Changed from applyLeaveWithUser to applyLeave
             await applyLeave(user, {
                 leave_type: leaveType,
                 start_date: fromDate.toISOString().split("T")[0],
@@ -83,20 +81,50 @@ export default function ApplyLeaveScreen() {
         }
     };
 
+    // Web-compatible date change handler
     const onFromDateChange = (event: any, selectedDate?: Date) => {
-        setShowDatePicker(Platform.OS === "ios");
-        if (selectedDate) {
-            setFromDate(selectedDate);
+        if (Platform.OS === "web") {
+            // For web, the event is from input type="date"
+            if (event.target.value) {
+                const newDate = new Date(event.target.value);
+                setFromDate(newDate);
+            }
+        } else {
+            // For mobile, use DateTimePicker
+            setShowDatePicker(Platform.OS === "ios");
+            if (selectedDate) {
+                setFromDate(selectedDate);
+            }
         }
     };
 
     const handleDurationChange = (text: string) => {
-        const value = parseInt(text);
+        console.log('Duration input:', text); // Debug log
+
+        // Handle empty input
+        if (text === '' || text === '0') {
+            setDuration(0);
+            return;
+        }
+
+        // Remove any non-numeric characters
+        const numericText = text.replace(/[^0-9]/g, '');
+
+        // Convert to number
+        const value = parseInt(numericText, 10);
+
+        // Set duration if it's a valid positive number
         if (!isNaN(value) && value > 0) {
             setDuration(value);
-        } else if (text === '') {
+        } else {
+            // If invalid, keep the previous value but update the display
             setDuration(1);
         }
+    };
+
+    // Format date for HTML input (YYYY-MM-DD)
+    const formatDateForInput = (date: Date) => {
+        return date.toISOString().split('T')[0];
     };
 
     // Show loading if auth is still loading
@@ -138,21 +166,46 @@ export default function ApplyLeaveScreen() {
 
                     <View style={styles.inputContainer}>
                         <Text style={styles.label}>From Date *</Text>
-                        <TouchableOpacity
-                            style={styles.datePickerWrapper}
-                            onPress={() => setShowDatePicker(true)}
-                        >
-                            <Ionicons name="calendar" size={18} color="#666" style={styles.dateIcon} />
-                            <Text style={styles.dateText}>{fromDate.toDateString()}</Text>
-                        </TouchableOpacity>
-                        {showDatePicker && (
-                            <DateTimePicker
-                                value={fromDate}
-                                mode="date"
-                                display={Platform.OS === "ios" ? "spinner" : "calendar"}
-                                onChange={onFromDateChange}
-                                minimumDate={new Date()}
-                            />
+
+                        {Platform.OS === "web" ? (
+                            // Web: Use HTML input type="date"
+                            <View style={styles.inputWrapper}>
+                                <Ionicons name="calendar" size={18} color="#666" style={styles.dateIcon} />
+                                <input
+                                    type="date"
+                                    value={formatDateForInput(fromDate)}
+                                    onChange={onFromDateChange}
+                                    min={formatDateForInput(new Date())}
+                                    style={{
+                                        border: 'none',
+                                        outline: 'none',
+                                        fontSize: '16px',
+                                        flex: 1,
+                                        padding: '8px 0',
+                                        backgroundColor: 'transparent'
+                                    }}
+                                />
+                            </View>
+                        ) : (
+                            // Mobile: Use DateTimePicker
+                            <>
+                                <TouchableOpacity
+                                    style={styles.datePickerWrapper}
+                                    onPress={() => setShowDatePicker(true)}
+                                >
+                                    <Ionicons name="calendar" size={18} color="#666" style={styles.dateIcon} />
+                                    <Text style={styles.dateText}>{fromDate.toDateString()}</Text>
+                                </TouchableOpacity>
+                                {showDatePicker && (
+                                    <DateTimePicker
+                                        value={fromDate}
+                                        mode="date"
+                                        display={Platform.OS === "ios" ? "spinner" : "calendar"}
+                                        onChange={onFromDateChange}
+                                        minimumDate={new Date()}
+                                    />
+                                )}
+                            </>
                         )}
                     </View>
 

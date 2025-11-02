@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, Alert, ActivityIndicator, ScrollView, Touchable
 import Input from "../../components/Input";
 import Button from "../../components/Button";
 import { useRouter } from "expo-router";
-import { signInWithEmail } from "../../services/authService";
 import { useAuth } from "../../services/AuthContext";
 
 export default function SignIn() {
@@ -39,27 +38,19 @@ export default function SignIn() {
 
         try {
             console.log("=== SIGNIN DEBUG START ===");
-            const result = await signInWithEmail(email, password);
-            console.log("Signin API result:", result);
+            console.log("📧 Attempting sign in with:", email);
 
-            if (result.ok && result.user) {
-                console.log("✅ Auth successful, storing user session...");
+            // ✅ Use ONLY the AuthContext signIn method (cleaner approach)
+            await signIn(email, password);
+            console.log("✅ Auth successful via AuthContext");
 
-                // Store user session
-                await signIn(result.user);
-                console.log("✅ User session stored");
+            // Show action modal instead of navigating directly
+            setShowActionModal(true);
+            console.log("✅ Action modal shown");
 
-                // Show action modal instead of navigating directly
-                setShowActionModal(true);
-
-                console.log("✅ Action modal shown");
-            } else {
-                console.log("❌ Signin failed:", result.error);
-                Alert.alert("Error", result.error || "Failed to sign in. Please try again.");
-            }
-        } catch (err) {
+        } catch (err: any) {
             console.error("🚨 Signin catch error:", err);
-            Alert.alert("Error", "An unexpected error occurred. Please try again.");
+            Alert.alert("Error", err.message || "Failed to sign in. Please try again.");
         } finally {
             setLoading(false);
             console.log("=== SIGNIN DEBUG END ===");
@@ -77,8 +68,6 @@ export default function SignIn() {
         console.log("🔄 Navigating to scanning...");
         router.replace("/face-verification/post");
     };
-
-    // Remove debug buttons since we don't need them anymore
 
     return (
         <>
@@ -129,6 +118,7 @@ export default function SignIn() {
                         title={loading ? "Signing In..." : "Sign In"}
                         onPress={handleSubmit}
                         style={styles.button}
+                        disabled={loading}
                     />
                 )}
 
@@ -139,6 +129,7 @@ export default function SignIn() {
                     title="Don't have an account? Sign Up"
                     onPress={() => router.push("/onboarding/signup")}
                     style={styles.signUpButton}
+                    disabled={loading}
                 />
             </ScrollView>
 

@@ -43,7 +43,10 @@ const AttendanceScanner: React.FC<AttendanceScannerProps> = ({ onBack }) => {
     const [attendanceSummary, setAttendanceSummary] = useState<{
         total_present: number;
         records: AttendanceRecord[];
-    } | null>(null);
+    }>({
+        total_present: 0,
+        records: []
+    });
     const [registeredFacesCount, setRegisteredFacesCount] = useState(0);
 
     // Polling interval for frames
@@ -104,8 +107,12 @@ const AttendanceScanner: React.FC<AttendanceScannerProps> = ({ onBack }) => {
         frameIntervalRef.current = setInterval(async () => {
             try {
                 const frameData = await ApiService.getScannerFrame();
-                setCurrentFrame(frameData.frame);
-                setLatestDetection(frameData.detection);
+                if (frameData && frameData.frame) {
+                    setCurrentFrame(frameData.frame);
+                }
+                if (frameData && frameData.detection) {
+                    setLatestDetection(frameData.detection);
+                }
             } catch (error) {
                 console.error('Error getting frame:', error);
                 // Continue polling despite errors
@@ -126,10 +133,19 @@ const AttendanceScanner: React.FC<AttendanceScannerProps> = ({ onBack }) => {
         try {
             const result = await ApiService.getAttendanceSummary();
             if (result.success) {
-                setAttendanceSummary(result.summary);
+                // Safe data handling with fallbacks
+                setAttendanceSummary({
+                    total_present: result.summary?.total_present || 0,
+                    records: result.summary?.attendanceList || result.summary?.records || []
+                });
             }
         } catch (error) {
             console.error('Error loading attendance summary:', error);
+            // Set default empty state on error
+            setAttendanceSummary({
+                total_present: 0,
+                records: []
+            });
         }
     }, []);
 
@@ -138,11 +154,15 @@ const AttendanceScanner: React.FC<AttendanceScannerProps> = ({ onBack }) => {
         const checkStatus = async () => {
             try {
                 const status = await ApiService.getScannerStatus();
-                setIsScanning(status.active);
-                setLatestDetection(status.latest_detection);
-                setRegisteredFacesCount(status.registered_faces);
+                setIsScanning(status?.active || false);
+                setLatestDetection(status?.latest_detection || {
+                    name: null,
+                    timestamp: null,
+                    status: 'waiting'
+                });
+                setRegisteredFacesCount(status?.registered_faces || 0);
 
-                if (status.active) {
+                if (status?.active) {
                     startFramePolling();
                 }
             } catch (error) {
@@ -165,7 +185,7 @@ const AttendanceScanner: React.FC<AttendanceScannerProps> = ({ onBack }) => {
     // Refresh attendance summary periodically
     useEffect(() => {
         summaryIntervalRef.current = setInterval(loadAttendanceSummary, 5000);
-        
+
         return () => {
             if (summaryIntervalRef.current) {
                 clearInterval(summaryIntervalRef.current);
@@ -310,17 +330,19 @@ const AttendanceScanner: React.FC<AttendanceScannerProps> = ({ onBack }) => {
                     <>
                         <View style={styles.summaryStats}>
                             <Text style={styles.totalPresent}>
-                                Total Present: {attendanceSummary.total_present}
+                                Total Present: {attendanceSummary.total_present || 0}
                             </Text>
                         </View>
 
-                        {attendanceSummary.records.length > 0 ? (
+                        {/* ✅ FIXED: Safe array length check */}
+                        {(attendanceSummary?.records?.length ?? 0) > 0 ? (
                             <View style={styles.recordsList}>
-                                {attendanceSummary.records.map((record, index) => (
+                                {/* ✅ FIXED: Safe array mapping */}
+                                {(attendanceSummary.records || []).map((record, index) => (
                                     <View key={index} style={styles.recordItem}>
                                         <View style={styles.recordInfo}>
-                                            <Text style={styles.recordName}>👤 {record.name}</Text>
-                                            <Text style={styles.recordTime}>🕐 {record.time}</Text>
+                                            <Text style={styles.recordName}>👤 {record.name || 'Unknown'}</Text>
+                                            <Text style={styles.recordTime}>🕐 {record.time || 'Unknown time'}</Text>
                                             {record.confidence && (
                                                 <Text style={styles.recordConfidence}>
                                                     📊 {(record.confidence * 100).toFixed(1)}%

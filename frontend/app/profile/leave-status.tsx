@@ -187,7 +187,7 @@ export default function LeaveStatusScreen() {
                 <View style={styles.header}>
                     <TouchableOpacity
                         style={styles.backButton}
-                        onPress={() => router.back()}
+                        onPress={() => router.replace("/home")}
                     >
                         <Ionicons name="chevron-back" size={24} color="#2196F3" />
                     </TouchableOpacity>
